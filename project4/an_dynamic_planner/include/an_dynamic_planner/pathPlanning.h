@@ -4,16 +4,19 @@
 // #include "ros/ros.h"
 #include <vector>
 #include "mapCell.h"
+#include <map>
 // #include <queue>
 #include <cmath>
 #include <iostream>
-#include "an_static_planner/myPQ.h"
+#include "an_dynamic_planner/myPQ.h"
 // #include "an_messages/obstacle.h"
 
 // discrete map stored in 2D vector
 std::vector<std::vector<mapCell*> > globalMap;
 // store obstacles
-std::vector<mapCell::obsState> allObstacles;
+// std::vector<mapCell::obsState> allObstacles;
+// obstacles map, key = time, value = obs
+std::map<double, std::vector<mapCell::obsState> > allObsTime;
 // motion primitives need to generate successors
 std::vector<std::vector<mapCell::carState*>* > MP;
 // starting epsilon for ARA*
@@ -22,6 +25,8 @@ double const epsilon_start = 3.0;
 double const decrease_factor = 0.8;
 // change lane cost factor
 double const change_lane_factor = 8;
+// time resolution for obstacle time
+double obsTimeResolution = 0.05;
 // open list
 myPQ open_list;
 // incons list
@@ -37,7 +42,7 @@ double total_length = 0;
 void constructGlobalMap(double total_w, double total_l, double left_Edge, double right_Edge, const double cell_size);
 
 // process obstacles, update on global map
-void processObstacles(mapCell::obsState os);
+void processObstacles(mapCell::obsState os, double cur_time);
 
 // set up a single c in global map. c can be start/goal/obstacle
 // NEED MODIFY: may not need this

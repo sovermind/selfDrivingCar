@@ -1,0 +1,15 @@
+<launch>
+  <param name="/MPRIM_FILE" value="$(find an_static_planner)/config/mprim.txt" />
+  <param name="/MAP_FILE" value="$(find an_scenario)/config/scenario1/map.txt" />
+  <param name="/OBS_FILE" value="$(find an_scenario)/config/scenario1/obstacles.txt" />
+
+  <node name="map_manager" pkg="an_map_manager" type="an_map_manager" output="screen" />
+  <node name="controller" pkg="an_controller" type="an_controller" output="screen" />
+  <!-- <node name="traj_generator" pkg="an_test" type="traj_generator" output="screen" /> -->
+  <node name="obstacles" pkg="an_obstacles" type="an_obstacles" output="screen" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find an_static_planner)/config/rviz_Config.rviz"/>
+  <node pkg="tf" type="static_transform_publisher" name="link_broadcaster" args="0 0 0 0 0 0 1 map world 1000" />
+  <node name="planner" pkg="an_static_planner" type="planner" output="screen"  />
+
+  <!-- launch-prefix="valgrind leak-check=full"  -->
+</launch>

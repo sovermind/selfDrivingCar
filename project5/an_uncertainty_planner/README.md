@@ -1,12 +1,8 @@
-# Project 3 -- Ego vechicle with static obstacles
+# Project 4 -- Ego vechicle with dynamic obstacles
 ## By Jiarui Yang
 
 ### Summary of the project
-This project implemented a vechicle path planner. When given the map and obstacles information, the Ego vechicle will use ARA* algorithm to calculate the oprimal path from start position to the goal position. The project will publish the final path in ROS and using Rviz to visualize the whole process using [AutoNav](https://gitlab.com/Dzhony/AutoNav) package.
-The total length of the final path will be output the screen. Using different choice of MP length will generate different path length and also different planning time. I tried using 25, 50, 100 meters as the MP straight travle length, which means for each step, vechicle will travel 25, 50 or 100 meters. Here are the results:
-25: total length 1670.4, planning time: 1.7s
-50:              1694,                  0.05s
-100:             1703,                  0.02s
+
 
 #### Detail of the project
 ##### 1. Motion Primitive:
@@ -21,7 +17,7 @@ After the motion primitives are generated, the text file will be put inside the 
 `goal`: will get the goal information from `AutoNav` package. The goal represents the final car state.
 `pose`: will get the start information from `AutoNav` package. The start represents the start car state.
 the start and goal position will be saved and used as planning the trajectory.
-`obstacle`: will get the 10 obstacle information from `AutoNav` package. 
+`obstacle`: will get the 12 obstacle information from `AutoNav` package. 
 `lanes`: will get the lane information from `AutoNav` package.
 ##### 3. setting up the whole map
 The map will be divided into small cells defined by the `mapCell` class. The `mapCell` contains the following private fields: 
@@ -38,3 +34,7 @@ following public fields:
 The map will be a 2 D vector of `mapCell`. After get the information from the `lanes` topic, and using `cell_size`, it can divide the whole map into small cells.
 ##### 4. planning using ARA*
 there are two functions `finalPathGenerate` and `ARAstar`. The `finalPathGenerate` will set up epsilon and call `ARAstar` repeatedly until the epsilon falls to 1. The epsilon will be multiplied by a decreasing factor during each loop. `ARAstar` will generate a path using current epsilon value. This value will be multiplied to the herustic value so that it will find the path quickly. When generating the next successor point, I used motion primitives saved before and also using obstacles to determine if it is a valid successor point. To determine the obstacle collison, I used three circles to represent the whole car body. And I assume the obstacle cars have the same dimension as the ego vechicle. Thus, by checking if the six circles' radius, I can determine if there's collision. If there is collision, I won't put that successor into the successor list.
+##### 5. adding the time state to the planner
+Different from project 3, now it will take time as additional state. Therefore, for obstacles, now for each time step, it will have different positions. To store and use this information, I used a map with key = time, value = vector of obstacles. When performing the collision detect, use the time at that time step, to search for the positions of all obstacles.
+When tracing back the point of all motion primitives' points, use the current time step plus the corresponding increment of that motion primitive point. 
+One last need to be sure is since the obstacles are published with a 5 seconds delay and will not be starting at the same time as the planner, need to take that time and sync with the planner's starting time. So that in Rviz, the planner's route will show up correctly.

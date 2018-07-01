@@ -193,7 +193,7 @@ void generateStraight() {
 		cur->x = i*alternativeL/totalCount;
 		cur->y = 0.0;
 		cur->theta = 0.0;
-		cur->t = i*totalTime/totalCount;
+		cur->t = i*totalTime/(totalLength/alternativeL)/totalCount;
 		// cout<<"x: "<<cur->x<<",t: "<<cur->t<<"i "<<i<<endl;
 		straightMP.push_back(cur);
 	}

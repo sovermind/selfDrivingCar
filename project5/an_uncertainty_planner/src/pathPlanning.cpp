@@ -1,4 +1,4 @@
-#include "an_static_planner/pathPlanning.h"
+#include "an_uncertainty_planner/pathPlanning.h"
 
 using namespace std;
 
@@ -14,6 +14,7 @@ void constructGlobalMap(double total_w, double total_l, double left_Edge, double
 			initState.y = left_Edge+i*cell_size + 0.5*cell_size;
 			initState.x = j*cell_size + 0.5*cell_size;
 			initState.theta = 0;
+			initState.t = 0;
 
 			mapCell* cur = new mapCell(initState, cell_size);
 			cur->row = i;
@@ -85,6 +86,8 @@ vector<mapCell*> finalPathGenerate(mapCell* start_cell, mapCell* goal_cell, vect
 	goal_cell->set_v(numeric_limits<double>::max());
 	start_cell->set_v(numeric_limits<double>::max());
 	start_cell->set_g(0); 
+	//initialize time for start to 0
+	start_cell->cs.t = 0;
 	// initialize epsilon
 	double epsilon = epsilon_start;
 	// empty the open list
@@ -189,6 +192,13 @@ vector<mapCell*> getSucc(mapCell* cur_cell) {
 		cout<<"WARNING: Motion Primitives not setup"<<endl;
 		return succ_list;
 	}
+	// cout<<"obstacle size: "<<allObsTime.size()<<endl;
+	// for (int ii = 0; ii < allObsTime.at(0).size(); ii++) {
+	// 	cout<<ii<<" x: "<<allObsTime.at(0).at(ii).x<<" y: "<<allObsTime.at(0).at(ii).y<<endl;
+	// }
+	// for (auto it = allObsTime.cbegin();it != allObsTime.cend(); ++it) {
+	// 	cout<<it->first<<endl;
+	// }
 	// cout<<MP[0]->size()<<endl;
 	// for each MP, develop successors
 	for (int i =0; i < MP.size(); i++) {
@@ -211,7 +221,32 @@ vector<mapCell*> getSucc(mapCell* cur_cell) {
 			// cout<<"check ith mp, jth point"<<i<<" "<<j<<endl;
 			double new_x = cur_state.x + MP[i]->at(j)->x;
 			double new_y = cur_state.y + MP[i]->at(j)->y;
+			double new_t = cur_state.t + MP[i]->at(j)->t;
 			// cout<<"check xy " <<new_x<<" "<<new_y<<endl;
+
+			// determine the closest time value
+			double remain = fmod(new_t, obsTimeResolution);
+			if (remain == obsTimeResolution) {
+				// right at that time
+			} else if (remain <= 0.025) {
+				new_t = new_t - remain;
+			} else {
+				new_t = new_t - remain + obsTimeResolution;
+			}
+			new_t = round(100*new_t)/100;
+			// cout<<"t: "<<new_t<<" remain: "<<remain<<endl;
+			vector<mapCell::obsState> allObstacles;
+
+			// cout<<"largest "<<allObsTime.rbegin()->first<<endl;
+			// make sure the time is within obstacles' largest time
+			if (new_t >= allObsTime.rbegin()->first) {
+				new_t = allObsTime.rbegin()->first;
+			}
+			// if (allObsTime.find(new_t) == allObsTime.end()) {
+			// 	cout<<"not find: "<<new_t<<endl;
+			// }
+			allObstacles = allObsTime.at(new_t);
+
 			for (int k = 0; k < allObstacles.size(); k++) {
 				// cout<<"check ith mp, jth point, kth obs"<<i<<" "<<j<<" "<<k<<endl;
 				// cout<<"hit obs: "<<allObstacles[k]->x<<" "<<allObstacles[k]->y<<endl;
@@ -230,6 +265,7 @@ vector<mapCell*> getSucc(mapCell* cur_cell) {
 			succ->cs = endState;
 			succ->cs.x = succ->cs.x + cur_state.x;
 			succ->cs.y = succ->cs.y + cur_state.y;
+			succ->cs.t = succ->cs.t + cur_state.t;
 			// insert into map, and will also make succ_s point to cell in global map
 			insertCellinMap(&succ);
 			succ_list.push_back(succ);
@@ -259,9 +295,6 @@ vector<mapCell*> generateCurPath(mapCell* start_cell, mapCell* goal_cell) {
 		c = c->parent;
 	}
 	// cout<<"check point"<<endl;
-	// double xx = path[path.size()-2]->cs.x;
-	// double yy = path[path.size()-2]->cs.y;
-	// cout<<"x: "<< xx<<" y:"<<yy<<endl;
 	path.push_back(c);
 	path.push_back(c->parent);
 
@@ -271,25 +304,34 @@ vector<mapCell*> generateCurPath(mapCell* start_cell, mapCell* goal_cell) {
 		path[i] = path[path.size()-1-i];
 		path[path.size()-1-i] = temp;
 	}
-	// double xx = path[1]->cs.x;
-	// double yy = path[1]->cs.y;
-	// // double xxx = path[1]->parent->cs.x;
-	// cout<<"x: "<< xx<<" y:"<<yy<<endl;
 	return path;
 }
 
-void processObstacles(mapCell::obsState os) {
+// for this project, I will need to add time vetor to each obstacles
+void processObstacles(mapCell::obsState os, double cur_time) {
 	// store all obstacles
 	// for (int ii = 0; ii < allObstacles.size(); ii++) {
 	// 	cout<<"obs a: "<<allObstacles[ii]->x<<" "<<allObstacles[ii]->y<<endl;
 	// }
 	// cout<<"start this cycle"<<endl;
-	allObstacles.push_back(os);
+
+	// allObstacles.push_back(os);
+	
 	// cout<<"obs: "<<os->x<<" "<<os->y<<endl;
 	// for (int ii = 0; ii < allObstacles.size(); ii++) {
 	// 	cout<<"obs b: "<<allObstacles[ii].x<<" "<<allObstacles[ii].y<<endl;
 	// }
 	// cout<<"finish this cycle"<<endl;
+	cur_time = round(cur_time*100)/100;
+	if (allObsTime.find(cur_time) == allObsTime.end()) {
+		// if time has not been inserted
+		vector<mapCell::obsState> thisTimeObs;
+		thisTimeObs.push_back(os);
+		allObsTime.insert(pair<double, vector<mapCell::obsState> >(cur_time, thisTimeObs));
+	} else {
+		// if time has been inserted
+		allObsTime.at(cur_time).push_back(os);
+	}
 	obsOK = true;
 }
 
@@ -376,7 +418,8 @@ bool checkHitObs(double newx, double newy, mapCell::obsState* obs) {
 
 bool twoCircleHit(double x1, double y1, double x2, double y2, double r) {
 	double dist = sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
-	if (dist < 2 * r) {
+	double buffer_offset = 0.5;
+	if (dist < 2 * r + buffer_offset) {
 		return true;
 	} 
 	return false;
@@ -385,26 +428,14 @@ bool twoCircleHit(double x1, double y1, double x2, double y2, double r) {
 vector<mapCell*> fullFillPath(vector<mapCell*> fp) {
 	vector<mapCell*> full_fp;
 	double dist = 0;
-	// double xx = fp[1]->cs.x;
-	// double yy = fp[1]->cs.y;
-	// cout<<"x: "<< xx<<" y:"<<yy<<endl;
-	for (int i = 0; i < fp.size(); i++) {
+
+	for (int i = 0; i < fp.size()-1; i++) {
 		// insert the current point
 		// full_fp.push_back(fp[i]);
 		// check the next point
 		for (int j = 0; j < MP.size(); j++) {
 			// if it's this MP
-			double next_x = 0;
-			double next_y = 0;
-			if (i == fp.size()-1) {
-				next_x = fp.back()->cs.x;
-				next_y = fp.back()->cs.y;
-			} else {
-				next_x = fp[i+1]->cs.x;
-				next_y = fp[i+1]->cs.y;
-			}
-
-			if (fp[i]->cs.x + MP[j]->back()->x == next_x && fp[i]->cs.y + MP[j]->back()->y == next_y) {
+			if (fp[i]->cs.x + MP[j]->back()->x == fp[i+1]->cs.x && fp[i]->cs.y + MP[j]->back()->y == fp[i+1]->cs.y) {
 				mapCell::carState prev_cs;
 				for (int k = 0; k < MP[j]->size()-1; k++) {
 					mapCell* cur = new mapCell();
@@ -412,6 +443,7 @@ vector<mapCell*> fullFillPath(vector<mapCell*> fp) {
 					cs.x = fp[i]->cs.x + MP[j]->at(k)->x;
 					cs.y = fp[i]->cs.y + MP[j]->at(k)->y;
 					cs.theta = MP[j]->at(k)->theta;
+					cs.t = fp[i]->cs.t + MP[j]->at(k)->t;
 					cur->cs = cs;
 					if (k > 0) {
 						double cur_dis = sqrt(pow(cs.x - prev_cs.x, 2) + pow(cs.y - prev_cs.y, 2));
@@ -426,7 +458,7 @@ vector<mapCell*> fullFillPath(vector<mapCell*> fp) {
 		}
 		
 	}
-	// full_fp.push_back(fp.back());
+	full_fp.push_back(fp.back());
 	// cout<<"size"<<full_fp.size()<<endl;
 
 	return full_fp;

@@ -1,4 +1,4 @@
-#include "an_static_planner/planner.h"
+#include "an_dynamic_planner/dynamic_planner.h"
 
 using namespace std;
 
@@ -18,7 +18,6 @@ an_messages::trajectory Planner_c::plan(ros::Duration d) {
 	ros::Time start = ros::Time::now();
 	double prev_x = final_path[0]->cs.x;
 	double prev_y = final_path[0]->cs.y;
-	// cout<<"x: "<< prev_x<<" y:"<<prev_y<<endl;
 	for (int i = 0; i < traj_size; i++) {
 		mapCell* cur = final_path[i];
 		mapCell::carState cs = cur->cs;
@@ -30,7 +29,10 @@ an_messages::trajectory Planner_c::plan(ros::Duration d) {
 		// set up the time stamp and frame id
 		double dist_diff = sqrt(pow(cs.x - prev_x, 2) + pow(cs.y - prev_y, 2));
 		// ros::Duration d(5);
-		cur_pt.header.stamp = start + d + ros::Duration(dist_diff/car_velocity);
+		// cur_pt.header.stamp = start + d + ros::Duration(dist_diff/car_velocity);
+		// TODO: Need to sync with the obstacles' time
+		// cur_pt.header.stamp = start + d + ros::Duration(cs.t);
+		cur_pt.header.stamp = obs_start_time + ros::Duration(cs.t);
     	cur_pt.header.frame_id = "/map";
 		// put current traj point into traj
 		completeTraj_msg.traj[i] = cur_pt;
@@ -65,7 +67,7 @@ void Planner_c::loadSingleMP(FILE* fp, char mp_name[]) {
 void Planner_c::loadMP() {
 	// check if there is mp param
 	// if only test this function, need to
-	// rosparam set /MPRIM_FILE /home/ubuntu/catkin_ws/src/student1707024/project3/an_static_planner/config/mprim.txt
+	// rosparam set /MPRIM_FILE /home/ubuntu/catkin_ws/src/student1707024/project3/an_dynamic_planner/config/mprim.txt
 	while (!ros::param::has("MPRIM_FILE")) {
     	ROS_WARN("[planner] sleeping while waiting");
     	ros::Duration(0.1).sleep();
@@ -182,30 +184,39 @@ void Planner_c::mapsub_callback(const an_messages::lanes& msg) {
 void Planner_c::obstacle_callback(const an_messages::obstacles& msg) {
 	// Process the obstacles
 	int obs_numb = msg.obs.size();
+	double testTime = ros::Time::now().toSec();
+	cout<<"start obs: "<<testTime<<endl;
 	for (int i = 0; i < obs_numb; i++) {
 		an_messages::obstacle obs_msg = msg.obs[i];
 		mapCell::obsState cur_obs;
 		// get car length and width
 		double length = obs_msg.length;
 		double width = obs_msg.width;
-
-		cur_obs.x = obs_msg.path[0].traj[0].position.x;
-		cur_obs.y = obs_msg.path[0].traj[0].position.y;
 		cur_obs.innerR = obs_msg.inner_radius;
 		cur_obs.outerR = obs_msg.outer_radius;
 		// develop the other two circles as obsCell
 		double circle_offset = length/3;
 		double circle_r = sqrt(pow(length/6, 2) + pow(width/2, 2));
-		// mapCell::obsState* front_obs;
-		// mapCell::obsState* back_obs;
-		// // assume the obstacles are straight along x direction
-		// front_obs.x = cur_obs.x + circle_offset;
-		// front_obs.y = cur_obs.y;
-		// back_obs.x = cur_obs.x - circle_offset;
-		// back_obs.y = cur_obs.y;
+		
 		cur_obs.threeCircleR = circle_r;
-		processObstacles(cur_obs);
+		double start_time = obs_msg.path[0].traj[0].header.stamp.toSec();
+		obs_start_time = obs_msg.path[0].traj[0].header.stamp;
+
+		for (int j = 0; j < obs_msg.path[0].traj.size(); j++) {
+			cur_obs.x = obs_msg.path[0].traj[j].position.x;
+			cur_obs.y = obs_msg.path[0].traj[j].position.y;
+			double cur_time = obs_msg.path[0].traj[j].header.stamp.toSec() - start_time;
+			processObstacles(cur_obs, cur_time);
+		}
+		
+		// double t0 = obs_msg.path[0].traj[0].header.stamp.toSec();
+		// double t1 = obs_msg.path[0].traj[1].header.stamp.toSec();
+		// double t10 = obs_msg.path[0].traj[100].header.stamp.toSec();
+		// cout<<"t1 - t0: "<<t1 - t0<<" t10 - t0: "<<t10 - t0<<endl;
 	}
+	double testTime2 = ros::Time::now().toSec();
+	cout<<"end obs: "<<testTime2<<endl;
+	cout<<"duration: "<<testTime2 - testTime<<endl;
 	obstacle_recieved_ = true;
 	// cout<<"obs check"<<endl;
 }
